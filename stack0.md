@@ -27,7 +27,7 @@ Dump of assembler code for function main:
 End of assembler dump.
 ```
 
-We can also see that there is likely to be a buffer from 0x1C-0X5c, representing a total of 64bytes which could suggest that there might be a stack of such a size. On `main+35` we notice that there is a comparison before some execution.
+We can also see that there is likely to be a buffer from 0x1C-0X5c, representing a total of 64bytes which could suggest that there might be a stack of such a size. On `main+33` we notice that there is a comparison before some execution.
 
 ## Idea and Attack process
 
@@ -44,7 +44,7 @@ Now we can try to overflow the stack and see what happens. We try to input 64cha
 ```shell
 ./stack0
 12345678901234567890123456789012345678901234567890123456789012341234
-you have changed the 'modified' variable
+>>>you have changed the 'modified' variable
 ```
 
 Success, and now we can see that the compare statement could be an `if` statement in the source code which is an exit and to prompt us to try again.
