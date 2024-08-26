@@ -1,0 +1,497 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with`a4paper' for UK/EU standard size
+\usepackage[a4paper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\usepackage{algorithm, algpseudocode}
+\usepackage{csquotes}
+\usepackage{subfig}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+\newcommand{\code}[1]{\lstinline|#1|}
+\setlength\parindent{0pt}
+
+\begin{document}
+\begin{titlepage}
+      \begin{center}
+            \vfill
+
+            \includegraphics[width=4cm]{sjtu.png}
+
+            \vspace{1cm}
+
+            \textbf{\huge Shanghai Jiao Tong University}
+
+            \vspace{0.5cm}
+
+            {\large Intel SGX}
+
+            \vspace{1.5cm}
+
+            Ng Tze Kean\\Student number: 721370290002
+
+      \end{center}
+\end{titlepage}
+
+\section*{Introduction}
+
+Intel Software Guard Extensions (Intel SGX) is an Intel technology for
+application developers who are seeking to protect select code and data from
+disclosure or modification. The SGX module protects code and data used in the
+processor and memory by creating a trusted execution environment (TEE).
+
+\section*{Implementation}
+
+\subsection*{SGX terminologies}
+
+We refer to the intel website to define the terminologies that are used in the
+SGX module of the intel chipset.
+
+\begin{enumerate}
+      \item Untrusted: refers to code or construct that runs in the application environment
+            outside the enclave.
+      \item Trusted: refers to code or construct that runs in the Trusted Execution
+            Environment inside the enclave.
+      \item ECALL: A call from the application into an interface function within the
+            enclave.
+      \item OCALL: A call made from within the enclave to the application.
+      \item Untrusted Run-Time System (uRTS): Code that executes outside the enclave
+            environment and performs functions such as: Loading and manipulating an enclave
+            (Ex: destroying an enclave). Making calls (ECALLs) to an enclave and receiving
+            calls (OCALLs) from an enclave.
+      \item Trusted Run-Time System (tRTS): Code that executes within the enclave
+            environment and performs functions such as: Receiving calls (ECALLs) from the
+            application and making calls outside (OCALLs) the enclave. Managing the enclave
+            itself.
+\end{enumerate}
+
+\subsection*{Enclave}
+
+We will implement RC4 encryption in this experiment in an SGX Enclave module.
+There will be 3 functions to be implemented in this experiment,
+\code{ecall_rc4_sbox_init()}; \code{ecall_rc4_generate_keystream(size_t
+      length)}; \code{ecall_rc4_decrypt([in, size=len] char* ciphertext, size_t
+      len)}. The key will be a \code{global_key} that can be accessed in the Enclave
+module. The ciphertext given in the experiment is passed from App to the
+Enclave module for decryption. The result will then be output via OCALL.
+
+\subsection*{RC4}
+
+Rivest Cipher 4 (RC4) is a Stream Cipher that operates on a stream of data byte
+by byte. The detail of the algorithm will be briefly discussed below.
+References are made from
+\href{https://www.geeksforgeeks.org/what-is-rc4-encryption/}{here}.
+
+The encryption procedure is as follows
+
+\begin{enumerate}
+      \item The user inputs a plain text file and a secret key.
+      \item The encryption engine then generates the keystream by using Key Stream
+            Alogirhmn (KSA) and PseudoRandom Generation Algorithm (PGSA) Algorithm.
+      \item This keystream is now XOR with the plain text, this XORing is done byte by byte
+            to produce the encrypted text.
+      \item The encrypted text is then sent to the intended receiver, the intended receiver
+            will then decrypted the text and after decryption, the receiver will get the
+            original plain text.
+\end{enumerate}
+
+The decryption protocol is done through XOR operation on the ciphertext.
+
+\section*{Experiment}
+
+To start with the experiment we create the EDL file to define the interface
+support. This is mainly for the ECALL and the OCALL calls which will be used in
+the Enclave. There are two parts to an EDL file. The trusted section defines
+the ECALLS whereas the untrusted section defines the OCALLS. While an ECALL
+defines entry point into the enclave, the OCALL defines the transfer of control
+from inside the enclave to the application to perform system calls and other
+I/O operations.
+
+\begin{lstlisting}[language=c++]
+enclave {
+
+    trusted {
+        public void ecall_set_key([in, string] const char* key, size_t len);
+        public void ecall_rc4_sbox_init();
+        public void ecall_rc4_generate_keystream(size_t length);
+        public void ecall_rc4_decrypt([in, size=len] char* ciphertext, size_t len);
+    };
+
+    untrusted {
+        void ocall_print_result([in, string] char* buf, size_t len);
+    };
+};
+\end{lstlisting}
+
+With the defined interface, we define the Application that will interface with
+the Enclave. We make use of the config file for the Enclave found in some of
+the samples in the sandbox. We also make use of the makefile on the SDK build
+recommended in the instructions. Overall, the App is to first init the Enclave.
+We then set the encryption key defined in the instruction to be "gosecgosec".
+Next we make a ECALL to set the key. Once that is done, we create the S-Box and
+generate the keystream using the ECALL defined code. Next, we get the
+ciphertext and decrypt it through \code{ecall_rc4_decrypt}.
+
+Within each of these functions, we can see that we define the ECALL function in
+the \code{Enclave.cpp} and also call the OCALL that is defined in \code{App.cpp}.
+This is because we want to define the protected code in the Enclave and the untrusted
+code in the main application which we can call.
+
+\section*{Results}
+
+The codebase is cloned on the sandbox. To obtain the executable, we will call
+the make file with the following \code{make SGX_MODE=sim}. This will create a
+\code{app} file which can be called. Running the code, we will be prompted with
+the ciphertext which we will key in based on the instructions. The following
+result can be seen.
+
+\begin{lstlisting}[language=c++]
+./app
+>>>Generated Keystream: Result: 7A 17 32 06 15 C8 AO FE 20 8B FO 6A 5E E4 CB FF E1 57 25
+>>>Enter the ciphertext (hex format): 1c7b53616e81ce8a45e7af3919bc94aba41258
+>>>Ciphertext: 1C 7B 53 61 6E 81 CE 8A 45 E7 AF 39 19 BC 94 AB A4 12 58
+>>>Result: 66 60 61 67 7B 49 6E 74 65 6C 5F 53 47 58 5F 54 45 45 7D
+>>>Enter a character before exit ...
+\end{lstlisting}
+
+Since the output is a hexadecimal output, we can convert the output with a
+simple hexadecimal to ASCII online converter. We obtain the follow
+\code{flag\{Intel_SGX_TEE\}}
+
+\section*{References}
+
+https://www.intel.com/content/www/us/en/developer/tools/software-guard-extensions/overview.html
+
+https://github.com/intel/linux-sgx
+
+\section*{Code base}
+
+\subsection*{App.h}
+
+\begin{lstlisting}[language=c++]
+#ifndef _APP_H_
+#define _APP_H_
+
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+
+#include "sgx_error.h"       /* sgx_status_t */
+#include "sgx_eid.h"     /* sgx_enclave_id_t */
+
+#ifndef TRUE
+# define TRUE 1
+#endif
+
+#ifndef FALSE
+# define FALSE 0
+#endif
+
+# define ENCLAVE_FILENAME "enclave.signed.so"
+
+extern sgx_enclave_id_t global_eid;    /* global enclave id */
+
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+void edger8r_array_attributes(void);
+void edger8r_type_attributes(void);
+void edger8r_pointer_attributes(void);
+void edger8r_function_attributes(void);
+
+void ecall_libc_functions(void);
+void ecall_libcxx_functions(void);
+void ecall_thread_functions(void);
+
+#if defined(__cplusplus)
+}
+#endif
+
+#endif
+\end{lstlisting}
+
+\subsection*{App.cpp}
+
+\begin{lstlisting}[language=c++]
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
+#include <unistd.h>
+#include "sgx_urts.h"
+#include "App.h"
+#include "Enclave_u.h"
+
+#define ENCLAVE_FILENAME "enclave.signed.so"
+
+sgx_enclave_id_t global_eid = 0;
+
+void ocall_print_result(char *buf, size_t len)
+{
+      printf("Result: ");
+      for (size_t i = 0; i < len; ++i)
+            printf("%02X ", (unsigned char)buf[i]);
+      printf("\n");
+}
+
+int initialize_enclave(void)
+{
+      sgx_status_t ret = SGX_ERROR_UNEXPECTED;
+      ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, NULL, NULL, &global_eid, NULL);
+      if (ret != SGX_SUCCESS)
+      {
+            printf("Failed to create enclave, ret code: %d\n", ret);
+            return -1;
+      }
+      return 0;
+}
+
+void hex_to_bytes(const char *hex, unsigned char *bytes, size_t len)
+{
+      for (size_t i = 0; i < len; i++)
+      {
+            sscanf(&hex[2 * i], "%2hhx", &bytes[i]);
+      }
+}
+
+int main(int argc, char *argv[])
+{
+      (void)(argc);
+      (void)(argv);
+
+      if (initialize_enclave() < 0)
+      {
+            printf("Enter a character before exit ...\n");
+            getchar();
+            return -1;
+      }
+
+      // Set the encryption key
+      char key[] = "gosecgosec";
+      ecall_set_key(global_eid, key, sizeof(key) - 1); // Exclude the null terminator
+
+      // Initialize the S-box
+      ecall_rc4_sbox_init(global_eid);
+
+      // Generate and print the keystream
+      printf("Generated Keystream: ");
+      ecall_rc4_generate_keystream(global_eid, 19);
+
+      // Prompt user for the ciphertext
+      char hex_ciphertext[512];
+      printf("Enter the ciphertext (hex format): ");
+      fgets(hex_ciphertext, sizeof(hex_ciphertext), stdin);
+
+      // Remove the newline character if present
+      size_t len = strlen(hex_ciphertext);
+      if (hex_ciphertext[len - 1] == '\n')
+      {
+            hex_ciphertext[len - 1] = '\0';
+            len--;
+      }
+
+      // Convert hex string to byte array
+      size_t ciphertext_len = len / 2;
+      unsigned char *byte_ciphertext = (unsigned char *)malloc(ciphertext_len);
+      hex_to_bytes(hex_ciphertext, byte_ciphertext, ciphertext_len);
+
+      // Print the input ciphertext in bytes
+      printf("Ciphertext: ");
+      for (size_t i = 0; i < ciphertext_len; ++i)
+            printf("%02X ", byte_ciphertext[i]);
+      printf("\n");
+
+      // Decrypt the ciphertext
+      ecall_rc4_decrypt(global_eid, (char *)byte_ciphertext, ciphertext_len);
+
+      // Clean up
+      free(byte_ciphertext);
+
+      // Destroy the enclave
+      sgx_destroy_enclave(global_eid);
+      printf("Info: SampleEnclave successfully returned.\n");
+      printf("Enter a character before exit ...\n");
+      getchar();
+      return 0;
+}       
+\end{lstlisting}
+
+\subsection*{Enclave.h}
+
+\begin{lstlisting}[language=c++]
+#ifndef ENCLAVE_H
+#define ENCLAVE_H
+
+#include <stddef.h>  // Include size_t
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void ecall_set_key(const char *key, size_t len);
+void ecall_rc4_encrypt(char *plaintext, size_t len);
+void ecall_rc4_decrypt(char *ciphertext, size_t len);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+\end{lstlisting}
+
+\subsection*{Enclave.cpp}
+
+\begin{lstlisting}[language=c++]
+#include "Enclave.h"
+#include "Enclave_t.h"
+#include <string.h>
+#include <stdlib.h>
+
+
+/*We obtain the init and the crypt from public repositories*/
+
+// RC4 Generate SBox
+void rc4_init(unsigned char *s, const unsigned char *key, size_t key_len)
+{
+      int i, j = 0;
+      unsigned char k[256];
+      unsigned char tmp;
+
+      for (i = 0; i < 256; i++)
+      {
+            s[i] = (unsigned char)i;
+            k[i] = key[i % key_len];
+      }
+
+      for (i = 0; i < 256; i++)
+      {
+            j = (j + s[i] + k[i]) % 256;
+            tmp = s[i];
+            s[i] = s[j];
+            s[j] = tmp;
+      }
+}
+
+// RC4 Generate Keystream and apply XOR for encryption/decryption
+void rc4_crypt(unsigned char *s, unsigned char *data, size_t len, unsigned char *keystream)
+{
+      int i = 0, j = 0;
+      size_t k;
+      unsigned char tmp;
+
+      for (k = 0; k < len; k++)
+      {
+            i = (i + 1) % 256;
+            j = (j + s[i]) % 256;
+            tmp = s[i];
+            s[i] = s[j];
+            s[j] = tmp;
+            unsigned char ks_byte = s[(s[i] + s[j]) % 256];
+            if (keystream != NULL)
+            {
+            keystream[k] = ks_byte;
+            }
+            data[k] ^= ks_byte;
+      }
+}
+
+/*We create the global variable such that it can be used within the module*/
+
+// Global variables for RC4
+unsigned char global_key[256];
+size_t global_key_len;
+unsigned char s[256]; // S-box
+
+/*We define the implementation of the interface function below these functions
+have their trusted and untrusted properties defined in the EDL*/
+
+extern "C" void ecall_set_key(const char *key, size_t len)
+{
+      if (len > 256)
+            len = 256;
+      memcpy(global_key, key, len);
+      global_key_len = len;
+}
+
+extern "C" void ecall_rc4_sbox_init()
+{
+      rc4_init(s, global_key, global_key_len);
+}
+
+extern "C" void ecall_rc4_generate_keystream(size_t length)
+{
+      unsigned char s_local[256];
+      memcpy(s_local, s, 256); // Use a local copy of S-box for keystream generation
+
+      unsigned char data[256] = {0};
+      unsigned char keystream[256]; // Local keystream buffer
+
+      rc4_crypt(s_local, data, length, keystream);
+      ocall_print_result((char *)keystream, length);
+}
+
+extern "C" void ecall_rc4_decrypt(char *ciphertext, size_t len)
+{
+      unsigned char s_local[256];
+      memcpy(s_local, s, 256); // Use a local copy of S-box for decryption
+
+      rc4_crypt(s_local, (unsigned char *)ciphertext, len, NULL);
+      ocall_print_result(ciphertext, len);
+}
+\end{lstlisting}
+
+\subsection*{Enclave.config.xml}
+
+\begin{lstlisting}[language=c++]
+<EnclaveConfiguration>
+  <ProdID>0</ProdID>
+  <ISVSVN>0</ISVSVN>
+  <StackMaxSize>0x40000</StackMaxSize>
+  <HeapMaxSize>0x100000</HeapMaxSize>
+  <TCSNum>10</TCSNum>
+  <TCSPolicy>1</TCSPolicy>
+  <!-- Recommend changing 'DisableDebug' to 1 to make the enclave undebuggable for enclave release -->
+  <DisableDebug>0</DisableDebug>
+  <MiscSelect>0</MiscSelect>
+  <MiscMask>0xFFFFFFFF</MiscMask>
+</EnclaveConfiguration>
+\end{lstlisting}
+
+\end{document}

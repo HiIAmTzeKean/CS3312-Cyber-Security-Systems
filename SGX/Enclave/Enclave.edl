@@ -1,0 +1,13 @@
+enclave {
+
+    trusted {
+        public void ecall_set_key([in, string] const char* key, size_t len);
+        public void ecall_rc4_sbox_init();
+        public void ecall_rc4_generate_keystream(size_t length);
+        public void ecall_rc4_decrypt([in, size=len] char* ciphertext, size_t len);
+    };
+
+    untrusted {
+        void ocall_print_result([in, string] char* buf, size_t len);
+    };
+};
