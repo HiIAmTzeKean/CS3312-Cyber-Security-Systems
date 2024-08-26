@@ -1,0 +1,119 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.3 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{nty/global//global/global/global}
+    \entry{khare2023SpotOn}{inproceedings}{}{}
+      \name{author}{5}{}{%
+        {{hash=c92b6e77b42dbd8bbe20b439c377b54e}{%
+           family={Khare},
+           familyi={K\bibinitperiod},
+           given={Yash},
+           giveni={Y\bibinitperiod}}}%
+        {{hash=78a679aa0c0efa7b503e6bf7634ce5df}{%
+           family={Lakara},
+           familyi={L\bibinitperiod},
+           given={Kumud},
+           giveni={K\bibinitperiod}}}%
+        {{hash=a161b3e1eec452aea465cf8cbcf5673d}{%
+           family={Mittal},
+           familyi={M\bibinitperiod},
+           given={Sparsh},
+           giveni={S\bibinitperiod}}}%
+        {{hash=318fb808d9b4a08841205cc4ed75c902}{%
+           family={Kaushik},
+           familyi={K\bibinitperiod},
+           given={Arvind},
+           giveni={A\bibinitperiod}}}%
+        {{hash=0b7c6c9add4011a9ffc697764288043c}{%
+           family={Singhal},
+           familyi={S\bibinitperiod},
+           given={Rekha},
+           giveni={R\bibinitperiod}}}%
+      }
+      \list{location}{1}{%
+        {California, USA}%
+      }
+      \strng{namehash}{1b4c782967f1a5b78ff00e6b431bdb96}
+      \strng{fullhash}{5c059d3e301f4e0a8d9463036fa0ce14}
+      \strng{fullhashraw}{5c059d3e301f4e0a8d9463036fa0ce14}
+      \strng{bibnamehash}{1b4c782967f1a5b78ff00e6b431bdb96}
+      \strng{authorbibnamehash}{1b4c782967f1a5b78ff00e6b431bdb96}
+      \strng{authornamehash}{1b4c782967f1a5b78ff00e6b431bdb96}
+      \strng{authorfullhash}{5c059d3e301f4e0a8d9463036fa0ce14}
+      \strng{authorfullhashraw}{5c059d3e301f4e0a8d9463036fa0ce14}
+      \field{sortinit}{K}
+      \field{sortinithash}{c02bf6bff1c488450c352b40f5d853ab}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{24th International Symposium on Quality Electronic Design (ISQED)}
+      \field{title}{{SpotOn: A Gradient-based Targeted Data Poisoning Attack on Deep Neural Networks}}
+      \field{year}{2023}
+      \true{nocite}
+    \endentry
+    \entry{li_andreeto_ranzato_perona_2022}{misc}{}{}
+      \name{author}{4}{}{%
+        {{hash=9147b1a8523fee33e02ea8ada6fde536}{%
+           family={Li},
+           familyi={L\bibinitperiod},
+           given={Fei-Fei},
+           giveni={F\bibinithyphendelim F\bibinitperiod}}}%
+        {{hash=ed96f6fe2b444b01118a921c7644c028}{%
+           family={Andreeto},
+           familyi={A\bibinitperiod},
+           given={Marco},
+           giveni={M\bibinitperiod}}}%
+        {{hash=6d93a2b5e4e1f368f5ffe4344bfec8ef}{%
+           family={Ranzato},
+           familyi={R\bibinitperiod},
+           given={Marc'Aurelio},
+           giveni={M\bibinitperiod}}}%
+        {{hash=e52876f830a8a20786ff3e4d7dd6f083}{%
+           family={Perona},
+           familyi={P\bibinitperiod},
+           given={Pietro},
+           giveni={P\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {CaltechDATA}%
+      }
+      \strng{namehash}{dc10d9d8a1f2ebd9a4e16ac91ababd91}
+      \strng{fullhash}{156f1eb0665261f6761d98ca2aa2a189}
+      \strng{fullhashraw}{156f1eb0665261f6761d98ca2aa2a189}
+      \strng{bibnamehash}{dc10d9d8a1f2ebd9a4e16ac91ababd91}
+      \strng{authorbibnamehash}{dc10d9d8a1f2ebd9a4e16ac91ababd91}
+      \strng{authornamehash}{dc10d9d8a1f2ebd9a4e16ac91ababd91}
+      \strng{authorfullhash}{156f1eb0665261f6761d98ca2aa2a189}
+      \strng{authorfullhashraw}{156f1eb0665261f6761d98ca2aa2a189}
+      \field{sortinit}{L}
+      \field{sortinithash}{7c47d417cecb1f4bd38d1825c427a61a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{month}{4}
+      \field{title}{Caltech 101}
+      \field{year}{2022}
+      \true{nocite}
+      \verb{doi}
+      \verb 10.22002/D1.20086
+      \endverb
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+
